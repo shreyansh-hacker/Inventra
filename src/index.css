@@ -1170,17 +1170,37 @@ ul, ol {
   gap: var(--space-3);
 }
 
+.quick-actions-top-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 992px) {
+  .quick-actions-top-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .quick-actions-top-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .quick-action {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-3);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
   background: var(--surface-primary);
+  text-decoration: none;
 }
 
 .quick-action:hover {
@@ -1191,20 +1211,27 @@ ul, ol {
 }
 
 .quick-action-icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-tertiary);
+  background: #f0f4ff;
   color: var(--primary);
+  transition: all var(--transition-fast);
+}
+
+.quick-action:hover .quick-action-icon {
+  background: var(--primary-100);
+  color: var(--primary-700);
+  transform: scale(1.06);
 }
 
 .quick-action-label {
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   text-align: center;
 }
 

@@ -6,7 +6,8 @@ import {
   ArrowUpFromLine, ArrowLeftRight, Activity, TrendingUp, TrendingDown,
   ChevronRight, ArrowRight, Plus, SlidersHorizontal, ClipboardCheck,
   Truck, Warehouse, MoveRight, PackageCheck, ShieldAlert, Clock,
-  Ban, TriangleAlert, ShieldCheck, LogOut, KeyRound, UserCheck, RefreshCw
+  Ban, TriangleAlert, ShieldCheck, LogOut, KeyRound, UserCheck, RefreshCw,
+  History, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react'
 import api from '../services/api.js'
 
@@ -18,14 +19,16 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [healthData, setHealthData] = useState(null)
   const [alertsList, setAlertsList] = useState([])
+  const [recentMovements, setRecentMovements] = useState([])
   const [refreshing, setRefreshing] = useState(false)
 
   const loadData = async () => {
     try {
-      const [sumRes, healthRes, alertsRes] = await Promise.allSettled([
+      const [sumRes, healthRes, alertsRes, movRes] = await Promise.allSettled([
         api.dashboard.getSummary(),
         api.dashboard.getHealth(),
-        api.alerts.getAll({ status: 'OPEN' })
+        api.alerts.getAll({ status: 'OPEN' }),
+        api.dashboard.getMovements(5)
       ])
 
       if (sumRes.status === 'fulfilled' && sumRes.value?.success) {
@@ -36,6 +39,9 @@ export default function Dashboard() {
       }
       if (alertsRes.status === 'fulfilled' && alertsRes.value?.success) {
         setAlertsList(alertsRes.value.data || [])
+      }
+      if (movRes.status === 'fulfilled' && movRes.value?.success) {
+        setRecentMovements(movRes.value.data || [])
       }
     } catch (err) {
       console.error('Error loading live dashboard metrics:', err)
@@ -69,6 +75,15 @@ export default function Dashboard() {
     }
     return `₹${Number(val).toLocaleString('en-IN')}`
   }
+
+  // 5 Prominent Quick Actions
+  const quickActions = [
+    { label: 'New Receipt', icon: ArrowDownToLine, path: '/receipts' },
+    { label: 'New Delivery', icon: ArrowUpFromLine, path: '/deliveries' },
+    { label: 'New Internal Transfer', icon: ArrowLeftRight, path: '/transfers' },
+    { label: 'Adjust Stock', icon: SlidersHorizontal, path: '/adjustments' },
+    { label: 'Add Product', icon: Plus, path: '/products' },
+  ]
 
   const kpis = [
     {
@@ -145,18 +160,9 @@ export default function Dashboard() {
     { label: 'Delivered', count: summary?.pendingDeliveries || 0, color: 'var(--primary-50)', iconColor: 'var(--primary)' },
   ]
 
-  const quickActions = [
-    { label: 'Receive Stock', icon: ArrowDownToLine, path: '/receipts' },
-    { label: 'Create Delivery', icon: ArrowUpFromLine, path: '/deliveries' },
-    { label: 'Move Stock', icon: ArrowLeftRight, path: '/transfers' },
-    { label: 'Adjust Stock', icon: SlidersHorizontal, path: '/adjustments' },
-    { label: 'Add Product', icon: Plus, path: '/products' },
-    { label: 'Stock Count', icon: ClipboardCheck, path: '/stock-count' },
-  ]
-
   return (
     <div>
-      {/* Active Operational Session Status Banner */}
+      {/* 1. Dashboard Header */}
       <div className="session-status-banner">
         <div className="session-banner-left">
           <div className="session-live-indicator">
@@ -191,12 +197,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Greeting */}
       <div className="page-header" style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="page-header-title">Good morning, {firstName} 👋</h1>
           <p className="page-header-subtitle">
-            Authenticated as <strong>{session?.user?.role || 'Inventory Administrator'}</strong>. Live operational status across all warehouse bins:
+            Authenticated as <strong>{session?.user?.role || 'Inventory Administrator'}</strong>. Real-time operational map and live stock custody:
           </p>
         </div>
         <button
@@ -211,7 +216,31 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* KPI Grid */}
+      {/* 2. Quick Actions (Moved directly below header, above KPI cards) */}
+      <div className="card mb-6" style={{ background: 'var(--surface-primary)', border: '1px solid var(--border-light)' }}>
+        <div className="card-header" style={{ padding: 'var(--space-4) var(--space-5) var(--space-3)' }}>
+          <div className="card-title" style={{ fontSize: 'var(--font-md)', fontWeight: 600 }}>Quick Actions</div>
+        </div>
+        <div className="card-body" style={{ padding: '0 var(--space-5) var(--space-5)' }}>
+          <div className="quick-actions-top-grid">
+            {quickActions.map(action => (
+              <div
+                key={action.label}
+                className="quick-action"
+                onClick={() => navigate(action.path)}
+                title={action.label}
+              >
+                <div className="quick-action-icon">
+                  <action.icon size={20} />
+                </div>
+                <div className="quick-action-label">{action.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. KPI Cards */}
       <div className="kpi-grid">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="kpi-card" onClick={() => navigate(kpi.path)}>
@@ -234,10 +263,15 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Inventory Flow Timeline */}
+      {/* 4. Receipt & Delivery Summary (Today's Inventory Flow) */}
       <div className="card mb-6">
         <div className="card-header">
-          <div className="card-title">Today's Inventory Flow</div>
+          <div>
+            <div className="card-title">Receipt & Delivery Summary</div>
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+              Today's inventory velocity & stock throughput
+            </div>
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/move-history')}>
             View All <ChevronRight size={14} />
           </button>
@@ -271,11 +305,17 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Two Column Layout: 5. Inventory/Stock Overview & 6. Recent Operations / Activity */}
       <div className="grid-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        {/* Inventory Health */}
+        {/* 5. Inventory/Stock Overview */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Inventory Health</div>
+            <div>
+              <div className="card-title">Inventory Health & Stock Overview</div>
+              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                Stock health distribution and automated reorder buffers
+              </div>
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/products')}>
               View All <ChevronRight size={14} />
             </button>
@@ -323,10 +363,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Priority Queue + Quick Actions */}
+        {/* 6. Recent Operations / Activity */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {/* Priority Queue */}
-          <div className="card" style={{ flex: 1 }}>
+          {/* Priority Queue (Live Alerts) */}
+          <div className="card">
             <div className="card-header">
               <div className="card-title">Priority Queue (Live Alerts)</div>
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/alerts')}>
@@ -339,16 +379,16 @@ export default function Dashboard() {
                   No open operational alerts at this time.
                 </div>
               ) : (
-                alertsList.slice(0, 4).map(alert => (
+                alertsList.slice(0, 3).map(alert => (
                   <div key={alert.id} className="priority-item" onClick={() => navigate('/alerts')}>
-                    <div className={`priority-icon ${alert.severity === 'CRITICAL' ? 'critical' : alert.severity === 'WARNING' ? 'warning' : 'info'}`}>
-                      {alert.severity === 'CRITICAL' && <Ban size={14} />}
-                      {alert.severity === 'WARNING' && <TriangleAlert size={14} />}
-                      {alert.severity === 'INFO' && <Activity size={14} />}
+                    <div className={`priority-icon ${alert.severity === 'CRITICAL' || alert.type === 'critical' ? 'critical' : 'warning'}`}>
+                      {(alert.severity === 'CRITICAL' || alert.type === 'critical') && <Ban size={14} />}
+                      {(alert.severity === 'WARNING' || alert.type === 'warning') && <TriangleAlert size={14} />}
+                      {(alert.severity === 'INFO' || alert.type === 'info') && <Activity size={14} />}
                     </div>
                     <div className="priority-content">
                       <div className="priority-title">{alert.title}</div>
-                      <div className="priority-desc">{(alert.message || alert.description || '').split('.')[0]}.</div>
+                      <div className="priority-desc">{(alert.message || alert.desc || alert.description || '').split('.')[0]}.</div>
                       <div className="priority-action">
                         <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); navigate('/receipts'); }}>
                           Resolve
@@ -361,22 +401,48 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="card">
+          {/* Recent Operations & Movements Feed */}
+          <div className="card" style={{ flex: 1 }}>
             <div className="card-header">
-              <div className="card-title">Quick Actions</div>
+              <div className="card-title">Recent Operations & Movements</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/move-history')}>
+                View All <ChevronRight size={14} />
+              </button>
             </div>
-            <div className="card-body">
-              <div className="quick-actions">
-                {quickActions.map(action => (
-                  <div key={action.label} className="quick-action" onClick={() => navigate(action.path)}>
-                    <div className="quick-action-icon">
-                      <action.icon size={20} />
+            <div className="card-body" style={{ padding: 0 }}>
+              {recentMovements.length === 0 ? (
+                <div style={{ padding: 'var(--space-4)', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>
+                  No recent movements recorded today.
+                </div>
+              ) : (
+                recentMovements.slice(0, 4).map(m => (
+                  <div key={m.id} className="priority-item" onClick={() => navigate('/move-history')}>
+                    <div className="priority-icon" style={{
+                      background: m.operation === 'RECEIPT' || m.operation === 'Receipt' ? 'var(--success-50)' :
+                        m.operation === 'DELIVERY' || m.operation === 'Delivery' ? 'var(--primary-50)' : 'var(--warning-50)',
+                      color: m.operation === 'RECEIPT' || m.operation === 'Receipt' ? 'var(--success-600)' :
+                        m.operation === 'DELIVERY' || m.operation === 'Delivery' ? 'var(--primary-600)' : 'var(--warning-600)'
+                    }}>
+                      {m.operation === 'RECEIPT' || m.operation === 'Receipt' ? <ArrowDownLeft size={14} /> :
+                        m.operation === 'DELIVERY' || m.operation === 'Delivery' ? <ArrowUpRight size={14} /> : <ArrowLeftRight size={14} />}
                     </div>
-                    <div className="quick-action-label">{action.label}</div>
+                    <div className="priority-content">
+                      <div className="priority-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{m.product}</span>
+                        <span className="font-semibold" style={{
+                          fontSize: 'var(--font-xs)',
+                          color: String(m.quantity).startsWith('+') ? 'var(--success-600)' : String(m.quantity).startsWith('-') ? 'var(--danger-600)' : 'inherit'
+                        }}>
+                          {m.quantity}
+                        </span>
+                      </div>
+                      <div className="priority-desc">
+                        {m.reference} · {m.from} → {m.to}
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>
