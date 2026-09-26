@@ -2861,6 +2861,119 @@ ul, ol {
   margin-top: 1px;
 }
 
+.forgot-otp-modal {
+  max-width: 520px;
+  background: linear-gradient(170deg, #0f172a, #111827 60%, #1e293b);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.forgot-otp-modal .modal-header {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+.forgot-otp-modal .modal-title {
+  color: #f1f5f9;
+}
+
+.forgot-close-btn {
+  font-size: 22px;
+  line-height: 1;
+  color: #94a3b8;
+}
+
+.forgot-close-btn:hover {
+  color: #e2e8f0;
+}
+
+.forgot-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.forgot-step-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.forgot-step-chip.active {
+  border-color: rgba(37, 99, 235, 0.5);
+  background: rgba(37, 99, 235, 0.22);
+  color: #e0ecff;
+}
+
+.forgot-info-banner {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.36);
+  color: #a7f3d0;
+  font-size: 12px;
+  border-radius: var(--radius-md);
+  padding: 9px 10px;
+  margin-bottom: 12px;
+}
+
+.forgot-error-banner {
+  margin-bottom: 12px;
+}
+
+.forgot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.forgot-form .form-label {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.forgot-form .form-input {
+  background: rgba(2, 6, 23, 0.55);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #f8fafc;
+}
+
+.forgot-form .form-input::placeholder {
+  color: #64748b;
+}
+
+.forgot-submit-btn {
+  margin-top: 4px;
+}
+
+.forgot-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.forgot-done-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  color: #cbd5e1;
+}
+
+.forgot-done-state svg {
+  color: #34d399;
+}
+
+.forgot-done-state p {
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 360px;
+}
+
 /* ==========================================================================
    ACTIVE OPERATIONAL SESSION STATUS BANNER ON DASHBOARD
    ========================================================================== */
@@ -3009,6 +3122,10 @@ ul, ol {
   }
   .login-brand-panel {
     display: none;
+  }
+
+  .forgot-otp-modal {
+    width: 94%;
   }
 }
 

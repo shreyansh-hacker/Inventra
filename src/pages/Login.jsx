@@ -15,6 +15,16 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeRole, setActiveRole] = useState('Admin')
+  const [isForgotOpen, setIsForgotOpen] = useState(false)
+  const [forgotStep, setForgotStep] = useState('email')
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotOtp, setForgotOtp] = useState('')
+  const [forgotResetToken, setForgotResetToken] = useState('')
+  const [forgotNewPassword, setForgotNewPassword] = useState('')
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
+  const [forgotInfo, setForgotInfo] = useState('')
+  const [forgotError, setForgotError] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
 
   // If already authenticated, redirect straight to dashboard
   if (session) {
@@ -83,39 +93,103 @@ export default function Login() {
     }
   }
 
-  const handleForgotPassword = async () => {
-    const resetEmail = window.prompt('Enter your enterprise email for OTP verification:', email.trim())
-    if (!resetEmail || !resetEmail.trim()) return
+  const openForgotModal = () => {
+    setForgotEmail(email.trim())
+    setForgotStep('email')
+    setForgotOtp('')
+    setForgotResetToken('')
+    setForgotNewPassword('')
+    setForgotConfirmPassword('')
+    setForgotInfo('')
+    setForgotError('')
+    setIsForgotOpen(true)
+  }
+
+  const closeForgotModal = () => {
+    setIsForgotOpen(false)
+    setForgotLoading(false)
+    setForgotError('')
+  }
+
+  const handleRequestOtp = async (e) => {
+    e.preventDefault()
+    if (!forgotEmail.trim()) {
+      setForgotError('Enter your enterprise email first.')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+    setForgotInfo('')
 
     try {
-      const forgotRes = await api.auth.forgotPassword(resetEmail.trim())
-      let infoMsg = forgotRes?.message || 'OTP dispatched. Check your secure channel.'
+      const forgotRes = await api.auth.forgotPassword(forgotEmail.trim())
+      let message = forgotRes?.message || 'OTP dispatched. Check your secure channel.'
       if (forgotRes?.debugOtp) {
-        infoMsg += `\n\nDev OTP: ${forgotRes.debugOtp}`
+        message += ` Dev OTP: ${forgotRes.debugOtp}`
       }
-      window.alert(infoMsg)
 
-      const otp = window.prompt('Enter the OTP received:')
-      if (!otp || !otp.trim()) return
+      setForgotInfo(message)
+      setForgotStep('otp')
+    } catch (err) {
+      setForgotError(err?.message || 'Unable to request OTP. Please retry.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
 
-      const verifyRes = await api.auth.verifyOtp(resetEmail.trim(), otp.trim())
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault()
+    if (!forgotOtp.trim()) {
+      setForgotError('Enter the OTP sent to your channel.')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+
+    try {
+      const verifyRes = await api.auth.verifyOtp(forgotEmail.trim(), forgotOtp.trim())
       const resetToken = verifyRes?.data?.resetToken
       if (!resetToken) {
-        window.alert('Unable to verify OTP. Please retry.')
+        setForgotError('Unable to verify OTP. Request a fresh OTP.')
+        setForgotLoading(false)
         return
       }
 
-      const newPassword = window.prompt('Enter your new password (minimum 8 characters):')
-      if (!newPassword || newPassword.length < 8) {
-        window.alert('Password must be at least 8 characters.')
-        return
-      }
-
-      await api.auth.resetPassword(resetEmail.trim(), resetToken, newPassword)
-      window.alert('Password reset successful. You can now sign in with your new password.')
-      setPassword('')
+      setForgotResetToken(resetToken)
+      setForgotStep('reset')
+      setForgotInfo('OTP verified. Create a new password now.')
     } catch (err) {
-      window.alert(err?.message || 'Password reset failed. Please try again.')
+      setForgotError(err?.message || 'Invalid or expired OTP.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault()
+    if (forgotNewPassword.length < 8) {
+      setForgotError('Password must be at least 8 characters.')
+      return
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError('New password and confirm password do not match.')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+
+    try {
+      await api.auth.resetPassword(forgotEmail.trim(), forgotResetToken, forgotNewPassword)
+      setPassword('')
+      setForgotStep('done')
+      setForgotInfo('Password reset successful. Use your new password to sign in.')
+    } catch (err) {
+      setForgotError(err?.message || 'Password reset failed. Please retry.')
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -231,7 +305,7 @@ export default function Login() {
                     href="#forgot"
                     onClick={(e) => {
                       e.preventDefault()
-                      handleForgotPassword()
+                      openForgotModal()
                     }}
                     className="forgot-link"
                   >
@@ -300,6 +374,119 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {isForgotOpen && (
+        <div className="modal-overlay" onClick={closeForgotModal}>
+          <div className="modal forgot-otp-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reset Password With OTP</h3>
+              <button type="button" className="forgot-close-btn" onClick={closeForgotModal} aria-label="Close reset modal">
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="forgot-steps">
+                <span className={`forgot-step-chip ${forgotStep === 'email' ? 'active' : ''}`}>1. Request OTP</span>
+                <span className={`forgot-step-chip ${forgotStep === 'otp' ? 'active' : ''}`}>2. Verify OTP</span>
+                <span className={`forgot-step-chip ${forgotStep === 'reset' ? 'active' : ''}`}>3. New Password</span>
+              </div>
+
+              {forgotInfo && <div className="forgot-info-banner">{forgotInfo}</div>}
+              {forgotError && <div className="login-error-alert forgot-error-banner"><AlertCircle size={14} /><span>{forgotError}</span></div>}
+
+              {forgotStep === 'email' && (
+                <form className="forgot-form" onSubmit={handleRequestOtp}>
+                  <label className="form-label" htmlFor="forgot-email">Enterprise Email</label>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    className="form-input"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@company.internal"
+                    required
+                  />
+                  <button type="submit" className="btn btn-primary forgot-submit-btn" disabled={forgotLoading}>
+                    {forgotLoading ? 'Dispatching OTP...' : 'Request OTP'}
+                  </button>
+                </form>
+              )}
+
+              {forgotStep === 'otp' && (
+                <form className="forgot-form" onSubmit={handleVerifyOtp}>
+                  <label className="form-label" htmlFor="forgot-otp">One-Time Password</label>
+                  <input
+                    id="forgot-otp"
+                    type="text"
+                    className="form-input"
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value)}
+                    placeholder="Enter 6-digit OTP"
+                    maxLength={6}
+                    required
+                  />
+                  <div className="forgot-actions-row">
+                    <button type="button" className="btn btn-secondary" onClick={() => setForgotStep('email')} disabled={forgotLoading}>
+                      Back
+                    </button>
+                    <button type="submit" className="btn btn-primary forgot-submit-btn" disabled={forgotLoading}>
+                      {forgotLoading ? 'Verifying...' : 'Verify OTP'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === 'reset' && (
+                <form className="forgot-form" onSubmit={handlePasswordReset}>
+                  <label className="form-label" htmlFor="forgot-new-password">New Password</label>
+                  <input
+                    id="forgot-new-password"
+                    type="password"
+                    className="form-input"
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    minLength={8}
+                    required
+                  />
+
+                  <label className="form-label" htmlFor="forgot-confirm-password">Confirm Password</label>
+                  <input
+                    id="forgot-confirm-password"
+                    type="password"
+                    className="form-input"
+                    value={forgotConfirmPassword}
+                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    minLength={8}
+                    required
+                  />
+
+                  <div className="forgot-actions-row">
+                    <button type="button" className="btn btn-secondary" onClick={() => setForgotStep('otp')} disabled={forgotLoading}>
+                      Back
+                    </button>
+                    <button type="submit" className="btn btn-primary forgot-submit-btn" disabled={forgotLoading}>
+                      {forgotLoading ? 'Updating...' : 'Reset Password'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === 'done' && (
+                <div className="forgot-done-state">
+                  <CheckCircle2 size={22} />
+                  <p>Reset completed. Return to login and sign in with your updated password.</p>
+                  <button type="button" className="btn btn-primary forgot-submit-btn" onClick={closeForgotModal}>
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
