@@ -56,6 +56,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, resetToken, newPassword })
     }),
+    updateProfile: (data) => request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
+    changePassword: (data) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   // Dashboard

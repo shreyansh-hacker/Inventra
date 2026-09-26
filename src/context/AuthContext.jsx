@@ -59,6 +59,40 @@ export function AuthProvider({ children }) {
     return newSession
   }
 
+  // Update session user details
+  const updateUserSession = (updatedUserFields) => {
+    setSession((prevSession) => {
+      if (!prevSession) return null
+      const updatedName = updatedUserFields.name || prevSession.user.name
+      const initials = updatedName
+        .split(' ')
+        .map(part => part[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+
+      const newSession = {
+        ...prevSession,
+        user: {
+          ...prevSession.user,
+          ...updatedUserFields,
+          initials: initials || prevSession.user.initials
+        }
+      }
+
+      try {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession))
+        if (prevSession.rememberMe) {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newSession))
+        }
+      } catch (err) {
+        console.error('Failed to update session storage:', err)
+      }
+
+      return newSession
+    })
+  }
+
   // Destroy session
   const destroySession = () => {
     try {
@@ -92,6 +126,7 @@ export function AuthProvider({ children }) {
         session,
         isAuthenticated: !!session,
         createSession,
+        updateUserSession,
         destroySession,
       }}
     >

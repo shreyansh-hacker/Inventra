@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, register, getCurrentUser, logout, forgotPassword, verifyOtp, resetPassword } from '../controllers/auth.controller.js';
+import { login, register, getCurrentUser, logout, forgotPassword, verifyOtp, resetPassword, updateProfile, changePassword } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 
@@ -42,6 +42,8 @@ router.post('/login', loginLimiter, login);
 router.post('/register', registerLimiter, register);
 router.post('/logout', logout);
 router.get('/me', authenticate, getCurrentUser);
+router.put('/profile', authenticate, updateProfile);
+router.post('/change-password', authenticate, changePassword);
 
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/verify-otp', verifyOtpLimiter, verifyOtp);
