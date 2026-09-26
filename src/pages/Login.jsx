@@ -119,20 +119,6 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="login-system-stats">
-            <div className="stat-pill">
-              <span className="stat-pill-dot" />
-              <span>Gateway: Online (Central Hub)</span>
-            </div>
-            <div className="stat-pill">
-              <ShieldCheck size={14} className="stat-pill-icon" />
-              <span>Session Auth: Encrypted JWT</span>
-            </div>
-            <div className="stat-pill">
-              <Warehouse size={14} className="stat-pill-icon" />
-              <span>Warehouses: 2 Connected</span>
-            </div>
-          </div>
 
           <div className="login-quote-card">
             <div className="quote-text">

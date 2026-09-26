@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Map, ClipboardCheck, ArrowDownToLine,
   ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, History,
-  BookOpen, Bell, BarChart3, Settings, User, LogOut, ChevronLeft,
-  ChevronRight, ChevronDown, ChevronUp
+  BookOpen, Bell, BarChart3, Settings, LogOut, ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
+import api from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const navSections = [
   {
@@ -25,10 +27,10 @@ const navSections = [
   {
     title: 'Operations',
     items: [
-      { label: 'Receipts', icon: ArrowDownToLine, path: '/receipts', badge: 2 },
-      { label: 'Deliveries', icon: ArrowUpFromLine, path: '/deliveries', badge: 3 },
-      { label: 'Internal Transfers', icon: ArrowLeftRight, path: '/transfers', badge: 1 },
-      { label: 'Adjustments', icon: SlidersHorizontal, path: '/adjustments' },
+      { label: 'Receipts', icon: ArrowDownToLine, path: '/receipts', badgeKey: 'receipts' },
+      { label: 'Deliveries', icon: ArrowUpFromLine, path: '/deliveries', badgeKey: 'deliveries' },
+      { label: 'Internal Transfers', icon: ArrowLeftRight, path: '/transfers', badgeKey: 'transfers' },
+      { label: 'Adjustments', icon: SlidersHorizontal, path: '/adjustments', badgeKey: 'adjustments' },
     ],
   },
   {
@@ -36,7 +38,7 @@ const navSections = [
     items: [
       { label: 'Move History', icon: History, path: '/move-history' },
       { label: 'Stock Ledger', icon: BookOpen, path: '/stock-ledger' },
-      { label: 'Alerts', icon: Bell, path: '/alerts', badge: 9 },
+      { label: 'Alerts', icon: Bell, path: '/alerts', badgeKey: 'alerts' },
     ],
   },
   {
@@ -48,12 +50,56 @@ const navSections = [
   },
 ]
 
-import { useAuth } from '../context/AuthContext.jsx'
-
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { session, destroySession } = useAuth()
+
+  const [badgeCounts, setBadgeCounts] = useState({
+    receipts: 0,
+    deliveries: 0,
+    transfers: 0,
+    adjustments: 0,
+    alerts: 0,
+  })
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchCounts = async () => {
+      try {
+        const [sumRes, alertRes] = await Promise.allSettled([
+          api.dashboard.getSummary(),
+          api.alerts.getAll({ status: 'open' })
+        ])
+
+        if (isMounted) {
+          let updated = { ...badgeCounts }
+          if (sumRes.status === 'fulfilled' && sumRes.value?.success && sumRes.value.data) {
+            const d = sumRes.value.data
+            updated.receipts = d.pendingReceipts ?? 0
+            updated.deliveries = d.pendingDeliveries ?? 0
+            updated.transfers = d.activeTransfers ?? 0
+            updated.adjustments = d.pendingAdjustments ?? 0
+          }
+          if (alertRes.status === 'fulfilled' && alertRes.value?.success && Array.isArray(alertRes.value.data)) {
+            updated.alerts = alertRes.value.data.filter(a => !a.isResolved).length
+          }
+          setBadgeCounts(updated)
+        }
+      } catch (e) {
+        // Silently handle error
+      }
+    }
+
+    fetchCounts()
+    const interval = setInterval(fetchCounts, 15000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [location.pathname])
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/'
@@ -83,20 +129,23 @@ export default function Sidebar({ collapsed, onToggle }) {
         {navSections.map((section) => (
           <div className="sidebar-section" key={section.title}>
             <div className="sidebar-section-title">{section.title}</div>
-            {section.items.map((item) => (
-              <div
-                key={item.path}
-                className={`sidebar-item${isActive(item.path) ? ' active' : ''}`}
-                onClick={() => navigate(item.path)}
-                title={collapsed ? item.label : undefined}
-              >
-                <item.icon size={20} className="sidebar-item-icon" />
-                <span className="sidebar-item-label">{item.label}</span>
-                {item.badge && (
-                  <span className="sidebar-item-badge">{item.badge}</span>
-                )}
-              </div>
-            ))}
+            {section.items.map((item) => {
+              const count = item.badgeKey ? badgeCounts[item.badgeKey] : 0
+              return (
+                <div
+                  key={item.path}
+                  className={`sidebar-item${isActive(item.path) ? ' active' : ''}`}
+                  onClick={() => navigate(item.path)}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <item.icon size={20} className="sidebar-item-icon" />
+                  <span className="sidebar-item-label">{item.label}</span>
+                  {count > 0 && (
+                    <span className="sidebar-item-badge">{count}</span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         ))}
       </nav>
