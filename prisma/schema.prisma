@@ -1,0 +1,483 @@
+// INVENTRA — Enterprise Inventory Management System
+// Prisma Schema for MySQL with Prisma Relation Mode
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------------------------------------------------------------------
+// 1. AUTHENTICATION & USERS
+// ---------------------------------------------------------------------
+
+model Role {
+  id          String   @id @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  permissions String?  @db.LongText
+  createdAt   DateTime @default(now()) @map("created_at")
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String        @id @default(cuid()) @db.VarChar(50)
+  name         String        @db.VarChar(100)
+  email        String        @unique @db.VarChar(150)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  roleId       String        @default("ADMIN") @map("role_id") @db.VarChar(50)
+  avatar       String        @default("YR") @db.VarChar(10)
+  phone        String?       @db.VarChar(30)
+  status       String        @default("active") @db.VarChar(20)
+  joinedAt     DateTime      @default(now()) @map("joined_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  role         Role?         @relation(fields: [roleId], references: [id])
+  sessions     UserSession[]
+  warehouses   Warehouse[]   @relation("WarehouseManager")
+  receipts     Receipt[]
+  deliveries   Delivery[]
+  transfers    Transfer[]
+  adjustments  Adjustment[]
+  auditLogs    AuditLog[]
+
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+model UserSession {
+  id         String   @id @default(cuid()) @map("session_id") @db.VarChar(64)
+  userId     String   @map("user_id") @db.VarChar(50)
+  token      String   @unique @db.VarChar(255)
+  rememberMe Boolean  @default(false) @map("remember_me")
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// ---------------------------------------------------------------------
+// 2. WAREHOUSES & LOCATIONS
+// ---------------------------------------------------------------------
+
+model Warehouse {
+  id           String      @id @db.VarChar(50)
+  name         String      @db.VarChar(100)
+  shortCode    String      @unique @map("short_code") @db.VarChar(20)
+  address      String      @db.Text
+  managerId    String?     @map("manager_id") @db.VarChar(50)
+  capacity     Int         @default(5000)
+  usedCapacity Int         @default(0) @map("used_capacity")
+  status       String      @default("active") @db.VarChar(20)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  manager      User?       @relation("WarehouseManager", fields: [managerId], references: [id])
+  locations    Location[]
+  receipts     Receipt[]
+  deliveries   Delivery[]
+
+  @@index([managerId])
+  @@map("warehouses")
+}
+
+model Location {
+  id           String          @id @db.VarChar(50)
+  warehouseId  String          @map("warehouse_id") @db.VarChar(50)
+  zone         String          @db.VarChar(50)
+  rack         String          @db.VarChar(50)
+  shelf        String          @default("S1") @db.VarChar(30)
+  bin          String          @default("B1") @db.VarChar(30)
+  code         String          @db.VarChar(50)
+  capacity     Int             @default(500)
+  occupied     Int             @default(0)
+  status       String          @default("active") @db.VarChar(20)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  stock        Stock[]
+  movementsFrom StockMovement[] @relation("MoveFromLocation")
+  movementsTo   StockMovement[] @relation("MoveToLocation")
+  receipts     Receipt[]
+  transfersFrom Transfer[]     @relation("TransferSource")
+  transfersTo   Transfer[]     @relation("TransferDest")
+  adjustments  Adjustment[]
+  alerts       Alert[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+  @@map("locations")
+}
+
+// ---------------------------------------------------------------------
+// 3. PRODUCT CATALOG
+// ---------------------------------------------------------------------
+
+model Category {
+  id          String    @id @db.VarChar(50)
+  name        String    @unique @db.VarChar(100)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Supplier {
+  id            String    @id @db.VarChar(50)
+  name          String    @db.VarChar(150)
+  contactPerson String    @map("contact_person") @db.VarChar(100)
+  phone         String    @db.VarChar(30)
+  email         String    @db.VarChar(150)
+  address       String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  products      Product[]
+  receipts      Receipt[]
+
+  @@map("suppliers")
+}
+
+model Customer {
+  id            String     @id @db.VarChar(50)
+  name          String     @db.VarChar(150)
+  contactPerson String?    @map("contact_person") @db.VarChar(100)
+  phone         String?    @db.VarChar(30)
+  email         String?    @db.VarChar(150)
+  address       String     @db.Text
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  deliveries    Delivery[]
+
+  @@map("customers")
+}
+
+model Product {
+  id                 String           @id @db.VarChar(50)
+  name               String           @db.VarChar(150)
+  sku                String           @unique @db.VarChar(50)
+  barcode            String           @unique @db.VarChar(50)
+  categoryId         String           @map("category_id") @db.VarChar(50)
+  unit               String           @default("unit") @db.VarChar(20)
+  initialStock       Int              @default(0) @map("initial_stock")
+  cost               Decimal          @default(0.00) @db.Decimal(12, 2)
+  sellingPrice       Decimal          @default(0.00) @map("selling_price") @db.Decimal(12, 2)
+  minStock           Int              @default(10) @map("min_stock")
+  maxStock           Int              @default(500) @map("max_stock")
+  reorderPoint       Int              @default(20) @map("reorder_point")
+  supplierId         String           @map("supplier_id") @db.VarChar(50)
+  defaultWarehouseId String?          @map("default_warehouse_id") @db.VarChar(50)
+  defaultLocationId  String?          @map("default_location_id") @db.VarChar(50)
+  status             String           @default("active") @db.VarChar(20)
+  lastMovementAt     DateTime?        @map("last_movement_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  category           Category?        @relation(fields: [categoryId], references: [id])
+  supplier           Supplier?        @relation(fields: [supplierId], references: [id])
+  stock              Stock[]
+  movements          StockMovement[]
+  receiptItems       ReceiptItem[]
+  deliveryItems      DeliveryItem[]
+  transferItems      TransferItem[]
+  adjustmentItems    AdjustmentItem[]
+  alerts             Alert[]
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([status])
+  @@map("products")
+}
+
+// ---------------------------------------------------------------------
+// 4. INVENTORY STOCK
+// ---------------------------------------------------------------------
+
+model Stock {
+  id            Int       @id @default(autoincrement())
+  productId     String    @map("product_id") @db.VarChar(50)
+  locationId    String    @map("location_id") @db.VarChar(50)
+  onHand        Int       @default(0) @map("on_hand")
+  reserved      Int       @default(0)
+  damaged       Int       @default(0)
+  available     Int       @default(0)
+  lastCountedAt DateTime? @map("last_counted_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location      Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, locationId])
+  @@index([productId])
+  @@index([locationId])
+  @@map("stock")
+}
+
+// ---------------------------------------------------------------------
+// 5. IMMUTABLE STOCK MOVEMENTS / LEDGER
+// ---------------------------------------------------------------------
+
+model StockMovement {
+  id             String    @id @default(cuid()) @db.VarChar(50)
+  productId      String    @map("product_id") @db.VarChar(50)
+  movementType   String    @map("movement_type") @db.VarChar(30)
+  quantity       Int
+  unit           String    @default("unit") @db.VarChar(20)
+  fromLocationId String?   @map("from_location_id") @db.VarChar(50)
+  toLocationId   String?   @map("to_location_id") @db.VarChar(50)
+  referenceId    String    @map("reference_id") @db.VarChar(100)
+  notes          String?   @db.Text
+  batchNumber    String?   @map("batch_number") @db.VarChar(50)
+  createdBy      String    @map("created_by") @db.VarChar(100)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromLocation   Location? @relation("MoveFromLocation", fields: [fromLocationId], references: [id])
+  toLocation     Location? @relation("MoveToLocation", fields: [toLocationId], references: [id])
+
+  @@index([productId])
+  @@index([movementType])
+  @@index([referenceId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+// ---------------------------------------------------------------------
+// 6. INBOUND RECEIPTS
+// ---------------------------------------------------------------------
+
+model Receipt {
+  id                    String        @id @db.VarChar(50)
+  reference             String        @unique @db.VarChar(50)
+  supplierId            String        @map("supplier_id") @db.VarChar(50)
+  warehouseId           String        @map("warehouse_id") @db.VarChar(50)
+  destinationLocationId String?       @map("destination_location_id") @db.VarChar(50)
+  scheduleDate          DateTime      @map("schedule_date") @db.Date
+  responsibleUserId     String        @map("responsible_user_id") @db.VarChar(50)
+  status                String        @default("DRAFT") @db.VarChar(30)
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now()) @map("created_at")
+  completedAt           DateTime?     @map("completed_at")
+
+  supplier              Supplier?     @relation(fields: [supplierId], references: [id])
+  warehouse             Warehouse?    @relation(fields: [warehouseId], references: [id])
+  destinationLocation   Location?     @relation(fields: [destinationLocationId], references: [id])
+  responsibleUser       User?         @relation(fields: [responsibleUserId], references: [id])
+  items                 ReceiptItem[]
+
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("receipts")
+}
+
+model ReceiptItem {
+  id          Int      @id @default(autoincrement())
+  receiptId   String   @map("receipt_id") @db.VarChar(50)
+  productId   String   @map("product_id") @db.VarChar(50)
+  expectedQty Int      @map("expected_qty")
+  receivedQty Int      @default(0) @map("received_qty")
+  difference  Int      @default(0)
+  unit        String   @default("unit") @db.VarChar(20)
+
+  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([receiptId])
+  @@index([productId])
+  @@map("receipt_items")
+}
+
+// ---------------------------------------------------------------------
+// 7. OUTBOUND DELIVERIES
+// ---------------------------------------------------------------------
+
+model Delivery {
+  id                String         @id @db.VarChar(50)
+  reference         String         @unique @db.VarChar(50)
+  customerId        String         @map("customer_id") @db.VarChar(50)
+  deliveryAddress   String         @map("delivery_address") @db.Text
+  warehouseId       String         @map("warehouse_id") @db.VarChar(50)
+  scheduleDate      DateTime       @map("schedule_date") @db.Date
+  responsibleUserId String         @map("responsible_user_id") @db.VarChar(50)
+  status            String         @default("DRAFT") @db.VarChar(30)
+  notes             String?        @db.Text
+  createdAt         DateTime       @default(now()) @map("created_at")
+  completedAt       DateTime?      @map("completed_at")
+
+  customer          Customer?      @relation(fields: [customerId], references: [id])
+  warehouse         Warehouse?     @relation(fields: [warehouseId], references: [id])
+  responsibleUser   User?          @relation(fields: [responsibleUserId], references: [id])
+  items             DeliveryItem[]
+
+  @@index([customerId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("deliveries")
+}
+
+model DeliveryItem {
+  id           Int      @id @default(autoincrement())
+  deliveryId   String   @map("delivery_id") @db.VarChar(50)
+  productId    String   @map("product_id") @db.VarChar(50)
+  requestedQty Int      @map("requested_qty")
+  reservedQty  Int      @default(0) @map("reserved_qty")
+  pickedQty    Int      @default(0) @map("picked_qty")
+  packedQty    Int      @default(0) @map("packed_qty")
+  deliveredQty Int      @default(0) @map("delivered_qty")
+  unit         String   @default("unit") @db.VarChar(20)
+
+  delivery     Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id])
+
+  @@index([deliveryId])
+  @@index([productId])
+  @@map("delivery_items")
+}
+
+// ---------------------------------------------------------------------
+// 8. INTERNAL TRANSFERS
+// ---------------------------------------------------------------------
+
+model Transfer {
+  id                    String         @id @db.VarChar(50)
+  reference             String         @unique @db.VarChar(50)
+  sourceLocationId      String         @map("source_location_id") @db.VarChar(50)
+  destinationLocationId String         @map("destination_location_id") @db.VarChar(50)
+  responsibleUserId     String         @map("responsible_user_id") @db.VarChar(50)
+  status                String         @default("DRAFT") @db.VarChar(30)
+  notes                 String?        @db.Text
+  createdAt             DateTime       @default(now()) @map("created_at")
+  completedAt           DateTime?      @map("completed_at")
+
+  sourceLocation        Location?      @relation("TransferSource", fields: [sourceLocationId], references: [id])
+  destinationLocation   Location?      @relation("TransferDest", fields: [destinationLocationId], references: [id])
+  responsibleUser       User?          @relation(fields: [responsibleUserId], references: [id])
+  items                 TransferItem[]
+
+  @@index([sourceLocationId])
+  @@index([destinationLocationId])
+  @@index([status])
+  @@map("transfers")
+}
+
+model TransferItem {
+  id         Int      @id @default(autoincrement())
+  transferId String   @map("transfer_id") @db.VarChar(50)
+  productId  String   @map("product_id") @db.VarChar(50)
+  quantity   Int
+  unit       String   @default("unit") @db.VarChar(20)
+
+  transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("transfer_items")
+}
+
+// ---------------------------------------------------------------------
+// 9. STOCK ADJUSTMENTS
+// ---------------------------------------------------------------------
+
+model Adjustment {
+  id                String           @id @db.VarChar(50)
+  reference         String           @unique @db.VarChar(50)
+  locationId        String           @map("location_id") @db.VarChar(50)
+  responsibleUserId String           @map("responsible_user_id") @db.VarChar(50)
+  reason            String           @db.VarChar(50)
+  status            String           @default("DRAFT") @db.VarChar(30)
+  notes             String?          @db.Text
+  createdAt         DateTime         @default(now()) @map("created_at")
+  appliedAt         DateTime?        @map("applied_at")
+
+  location          Location?        @relation(fields: [locationId], references: [id])
+  responsibleUser   User?            @relation(fields: [responsibleUserId], references: [id])
+  items             AdjustmentItem[]
+
+  @@index([locationId])
+  @@index([status])
+  @@map("adjustments")
+}
+
+model AdjustmentItem {
+  id           Int        @id @default(autoincrement())
+  adjustmentId String     @map("adjustment_id") @db.VarChar(50)
+  productId    String     @map("product_id") @db.VarChar(50)
+  systemQty    Int        @map("system_qty")
+  countedQty   Int        @map("counted_qty")
+  difference   Int
+  unit         String     @default("unit") @db.VarChar(20)
+
+  adjustment   Adjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id])
+
+  @@index([adjustmentId])
+  @@index([productId])
+  @@map("adjustment_items")
+}
+
+// ---------------------------------------------------------------------
+// 10. ALERTS
+// ---------------------------------------------------------------------
+
+model Alert {
+  id                String    @id @default(cuid()) @db.VarChar(50)
+  type              String    @db.VarChar(50)
+  severity          String    @default("INFO") @db.VarChar(20)
+  productId         String?   @map("product_id") @db.VarChar(50)
+  locationId        String?   @map("location_id") @db.VarChar(50)
+  message           String    @db.VarChar(255)
+  reason            String    @db.Text
+  recommendedAction String    @map("recommended_action") @db.VarChar(255)
+  status            String    @default("ACTIVE") @db.VarChar(20)
+  isResolved        Boolean   @default(false) @map("is_resolved")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  resolvedAt        DateTime? @map("resolved_at")
+
+  product           Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location          Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([severity])
+  @@index([isResolved])
+  @@map("alerts")
+}
+
+// ---------------------------------------------------------------------
+// 11. AUDIT LOGS
+// ---------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid()) @db.VarChar(50)
+  userId    String?  @map("user_id") @db.VarChar(50)
+  action    String   @db.VarChar(100)
+  entity    String   @db.VarChar(50)
+  entityId  String   @map("entity_id") @db.VarChar(100)
+  metadata  Json?
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  timestamp DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}

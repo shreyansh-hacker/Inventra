@@ -39,7 +39,7 @@ export default function Login() {
 
     try {
       // 1. Attempt authentication with MySQL backend API
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, rememberMe })
@@ -52,6 +52,7 @@ export default function Login() {
             email: data.user.email,
             name: data.user.name,
             role: data.user.role,
+            token: data.token,
             rememberMe,
           })
           setIsLoading(false)

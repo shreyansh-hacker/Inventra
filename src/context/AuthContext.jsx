@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
   })
 
   // Create new session
-  const createSession = ({ email, name, role = 'Inventory Administrator', rememberMe = false }) => {
+  const createSession = ({ email, name, role = 'Inventory Administrator', rememberMe = false, token = null }) => {
     const displayName = name || (email ? email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1) : 'Yash Rathore')
     const initials = displayName
       .split(' ')
@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
 
     const newSession = {
       sessionId: 'SESS-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-      token: 'inv_tok_' + Math.random().toString(36).substring(2, 14),
+      token: token || ('inv_tok_' + Math.random().toString(36).substring(2, 14)),
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours validity
       rememberMe: !!rememberMe,
