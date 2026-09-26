@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { api } from '../services/api.js'
 import { Eye, EyeOff, ShieldCheck, Lock, ArrowRight, Warehouse, KeyRound, CheckCircle2, UserCheck, AlertCircle } from 'lucide-react'
 
 export default function Login() {
@@ -38,34 +39,21 @@ export default function Login() {
     setError('')
 
     try {
-      // 1. Attempt authentication with MySQL backend API
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password, rememberMe })
-      })
+      const data = await api.auth.login({ email: email.trim(), password, rememberMe })
+      const user = data?.user || data?.data?.user
+      const token = data?.token || data?.data?.token
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.success && data.user) {
-          createSession({
-            email: data.user.email,
-            name: data.user.name,
-            role: data.user.role,
-            token: data.token,
-            rememberMe,
-          })
-          setIsLoading(false)
-          navigate('/', { replace: true })
-          return
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}))
-        if (res.status === 401) {
-          setIsLoading(false)
-          setError(errorData.message || 'Invalid email or password.')
-          return
-        }
+      if (data?.success && user) {
+        createSession({
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          token,
+          rememberMe,
+        })
+        setIsLoading(false)
+        navigate('/', { replace: true })
+        return
       }
     } catch {
       // Backend not running: proceed with client-side session creation
@@ -92,6 +80,42 @@ export default function Login() {
     } catch (err) {
       setIsLoading(false)
       setError('Failed to establish operational session. Please try again.')
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    const resetEmail = window.prompt('Enter your enterprise email for OTP verification:', email.trim())
+    if (!resetEmail || !resetEmail.trim()) return
+
+    try {
+      const forgotRes = await api.auth.forgotPassword(resetEmail.trim())
+      let infoMsg = forgotRes?.message || 'OTP dispatched. Check your secure channel.'
+      if (forgotRes?.debugOtp) {
+        infoMsg += `\n\nDev OTP: ${forgotRes.debugOtp}`
+      }
+      window.alert(infoMsg)
+
+      const otp = window.prompt('Enter the OTP received:')
+      if (!otp || !otp.trim()) return
+
+      const verifyRes = await api.auth.verifyOtp(resetEmail.trim(), otp.trim())
+      const resetToken = verifyRes?.data?.resetToken
+      if (!resetToken) {
+        window.alert('Unable to verify OTP. Please retry.')
+        return
+      }
+
+      const newPassword = window.prompt('Enter your new password (minimum 8 characters):')
+      if (!newPassword || newPassword.length < 8) {
+        window.alert('Password must be at least 8 characters.')
+        return
+      }
+
+      await api.auth.resetPassword(resetEmail.trim(), resetToken, newPassword)
+      window.alert('Password reset successful. You can now sign in with your new password.')
+      setPassword('')
+    } catch (err) {
+      window.alert(err?.message || 'Password reset failed. Please try again.')
     }
   }
 
@@ -207,7 +231,7 @@ export default function Login() {
                     href="#forgot"
                     onClick={(e) => {
                       e.preventDefault()
-                      alert('Demo environment: Simply choose any of the preset roles or enter any password to create your session.')
+                      handleForgotPassword()
                     }}
                     className="forgot-link"
                   >

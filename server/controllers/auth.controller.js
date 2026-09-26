@@ -1,8 +1,32 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
 import { JWT_SECRET } from '../middleware/auth.js';
 import { logAudit } from '../services/audit.service.js';
+
+const OTP_TTL_MS = 10 * 60 * 1000;
+const RESET_TTL_MS = 15 * 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
+
+const otpStore = new Map();
+const resetStore = new Map();
+
+function normalizeEmail(email = '') {
+  return String(email).trim().toLowerCase();
+}
+
+function hashValue(value = '') {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function generateOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function generateResetToken() {
+  return crypto.randomUUID();
+}
 
 export async function login(req, res) {
   try {
@@ -74,6 +98,14 @@ export async function login(req, res) {
       success: true,
       message: 'Authentication successful',
       token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role?.name || user.roleId,
+        avatar: user.avatar,
+        warehouse: 'Central Warehouse (Hub 1)',
+      },
       data: {
         token,
         user: {
@@ -175,5 +207,156 @@ export async function logout(req, res) {
     return res.json({ success: true, message: 'Successfully logged out' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function forgotPassword(req, res) {
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email address is required' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      const otp = generateOtp();
+      const now = Date.now();
+
+      otpStore.set(email, {
+        otpHash: hashValue(otp),
+        expiresAt: now + OTP_TTL_MS,
+        attempts: 0,
+        userId: user.id,
+      });
+      resetStore.delete(email);
+
+      await logAudit({
+        userId: user.id,
+        action: 'PASSWORD_RESET_OTP_REQUESTED',
+        entity: 'User',
+        entityId: user.id,
+        metadata: { email }
+      });
+
+      const response = {
+        success: true,
+        message: 'If the account exists, an OTP has been generated and dispatched.',
+      };
+
+      if (process.env.NODE_ENV !== 'production') {
+        response.debugOtp = otp;
+      }
+
+      return res.json(response);
+    }
+
+    return res.json({
+      success: true,
+      message: 'If the account exists, an OTP has been generated and dispatched.',
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Unable to start password reset flow', error: err.message });
+  }
+}
+
+export async function verifyOtp(req, res) {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const otp = String(req.body?.otp || '').trim();
+
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+    }
+
+    const otpEntry = otpStore.get(email);
+    if (!otpEntry) {
+      return res.status(400).json({ success: false, message: 'No OTP found. Please request a new OTP.' });
+    }
+
+    if (Date.now() > otpEntry.expiresAt) {
+      otpStore.delete(email);
+      return res.status(400).json({ success: false, message: 'OTP expired. Please request a new OTP.' });
+    }
+
+    if (otpEntry.attempts >= MAX_OTP_ATTEMPTS) {
+      otpStore.delete(email);
+      return res.status(429).json({ success: false, message: 'Too many invalid attempts. Request a fresh OTP.' });
+    }
+
+    const suppliedHash = hashValue(otp);
+    if (suppliedHash !== otpEntry.otpHash) {
+      otpEntry.attempts += 1;
+      otpStore.set(email, otpEntry);
+      return res.status(401).json({ success: false, message: 'Invalid OTP.' });
+    }
+
+    const resetToken = generateResetToken();
+    resetStore.set(email, {
+      resetToken,
+      userId: otpEntry.userId,
+      expiresAt: Date.now() + RESET_TTL_MS,
+    });
+    otpStore.delete(email);
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      data: { resetToken }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Unable to verify OTP', error: err.message });
+  }
+}
+
+export async function resetPassword(req, res) {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const newPassword = String(req.body?.newPassword || '');
+    const resetToken = String(req.body?.resetToken || '');
+
+    if (!email || !newPassword || !resetToken) {
+      return res.status(400).json({ success: false, message: 'Email, reset token and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
+    }
+
+    const resetEntry = resetStore.get(email);
+    if (!resetEntry || resetEntry.resetToken !== resetToken || Date.now() > resetEntry.expiresAt) {
+      resetStore.delete(email);
+      return res.status(400).json({ success: false, message: 'Reset session is invalid or expired. Verify OTP again.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      resetStore.delete(email);
+      return res.status(404).json({ success: false, message: 'User not found for provided email.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashedPassword }
+    });
+
+    await prisma.userSession.deleteMany({ where: { userId: user.id } }).catch(() => {});
+
+    resetStore.delete(email);
+    otpStore.delete(email);
+
+    await logAudit({
+      userId: user.id,
+      action: 'PASSWORD_RESET_COMPLETED',
+      entity: 'User',
+      entityId: user.id,
+      metadata: { email }
+    });
+
+    return res.json({ success: true, message: 'Password updated successfully. Please log in.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Unable to reset password', error: err.message });
   }
 }
