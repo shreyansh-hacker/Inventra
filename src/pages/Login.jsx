@@ -27,7 +27,7 @@ export default function Login() {
     setError('')
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!email.trim()) {
       setError('Please enter your company email address.')
@@ -37,21 +37,61 @@ export default function Login() {
     setIsLoading(true)
     setError('')
 
-    setTimeout(() => {
-      try {
-        const user = createSession({
-          email: email.trim(),
-          name: email.includes('priya') ? 'Priya Sharma' : email.includes('rahul') ? 'Rahul Verma' : 'Yash Rathore',
-          role: activeRole === 'Manager' ? 'Warehouse Operations Manager' : activeRole === 'Auditor' ? 'Inventory Quality Auditor' : 'Inventory Administrator',
-          rememberMe,
-        })
-        setIsLoading(false)
-        navigate('/', { replace: true })
-      } catch (err) {
-        setIsLoading(false)
-        setError('Failed to establish operational session. Please try again.')
+    try {
+      // 1. Attempt authentication with MySQL backend API
+      const res = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password, rememberMe })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.user) {
+          createSession({
+            email: data.user.email,
+            name: data.user.name,
+            role: data.user.role,
+            rememberMe,
+          })
+          setIsLoading(false)
+          navigate('/', { replace: true })
+          return
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          setIsLoading(false)
+          setError(errorData.message || 'Invalid email or password.')
+          return
+        }
       }
-    }, 450)
+    } catch {
+      // Backend not running: proceed with client-side session creation
+    }
+
+    // Client-side fallback session
+    try {
+      createSession({
+        email: email.trim(),
+        name: email.toLowerCase().includes('garage') || email.toLowerCase().includes('gargee')
+          ? 'Gargee Sharma'
+          : email.toLowerCase().includes('audichya')
+          ? 'Yash Audichya'
+          : 'Yash Rathore',
+        role: activeRole === 'Manager'
+          ? 'Warehouse Operations Manager'
+          : activeRole === 'Auditor'
+          ? 'Inventory Quality Auditor'
+          : 'Inventory Administrator',
+        rememberMe,
+      })
+      setIsLoading(false)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setIsLoading(false)
+      setError('Failed to establish operational session. Please try again.')
+    }
   }
 
   return (
@@ -130,18 +170,18 @@ export default function Login() {
                 <button
                   type="button"
                   className={`demo-pill ${activeRole === 'Manager' ? 'active' : ''}`}
-                  onClick={() => handleDemoSelect('Manager', 'priya.sharma@inventra.internal', 'manager@123')}
+                  onClick={() => handleDemoSelect('Manager', 'Garage.sharma@inventra.internal', 'manager@123')}
                 >
                   <Warehouse size={14} />
-                  <span>Manager (Priya)</span>
+                  <span>Manager (Gargee)</span>
                 </button>
                 <button
                   type="button"
                   className={`demo-pill ${activeRole === 'Auditor' ? 'active' : ''}`}
-                  onClick={() => handleDemoSelect('Auditor', 'rahul.verma@inventra.internal', 'auditor@123')}
+                  onClick={() => handleDemoSelect('Auditor', 'yash.audichya@inventra.internal', 'auditor@123')}
                 >
                   <KeyRound size={14} />
-                  <span>Auditor (Rahul)</span>
+                  <span>Auditor (Yash A.)</span>
                 </button>
               </div>
             </div>
